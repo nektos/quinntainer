@@ -1,0 +1,11 @@
+Parameters:
+  GitHubOrg:
+    Type: String
+  RepositoryName:
+    Type: String
+
+Resources:
+  Repo:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${GitHubOrg}/${RepositoryName}

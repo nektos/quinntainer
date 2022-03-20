@@ -1,0 +1,124 @@
+Parameters:
+  OidcProvider:
+    Type: String
+  GitHubOrg:
+    Type: String
+  RepositoryName:
+    Type: String
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub quinntainer-gha-${GitHubOrg}-${RepositoryName}
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRoleWithWebIdentity
+            Principal:
+              Federated: !Ref OidcProvider
+            Condition:
+              ForAllValues:StringLike:
+                token.actions.githubusercontent.com:aud: "sts.amazonaws.com"
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${RepositoryName}:ref:refs/heads/*
+      Policies:
+        - PolicyName: gha-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                - ecr:CreateRepository
+                - ecr:DescribeRepositories
+                - ecr:DeleteRepository
+                - ecr:BatchGetImage
+                - ecr:BatchCheckLayerAvailability
+                - ecr:CompleteLayerUpload
+                - ecr:GetDownloadUrlForLayer
+                - ecr:InitiateLayerUpload
+                - ecr:PutImage
+                - ecr:UploadLayerPart
+                Resource:
+                - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${GitHubOrg}/${RepositoryName}
+              - Effect: Allow
+                Action:
+                - cloudformation:DescribeStacks
+                - cloudformation:CreateStack
+                - cloudformation:CreateChangeSet
+                - cloudformation:DescribeChangeSet
+                - cloudformation:DeleteChangeSet
+                - cloudformation:ExecuteChangeSet
+                - cloudformation:DeleteStack
+                Resource:
+                - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/quinntainer-repo-${GitHubOrg}-${RepositoryName}/*
+                - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/quinntainer-app-${GitHubOrg}-${RepositoryName}/*
+              - Effect: Allow
+                Action:
+                - iam:GetRole
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                - iam:CreateRole
+                - iam:PutRolePolicy
+                - iam:DeleteRolePolicy
+                - iam:DeleteRole
+                - iam:UpdateRole
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    iam:PermissionsBoundary: !Ref PermissionsBoundary
+              - Effect: Allow
+                Action:
+                - iam:PassRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/quinntainer-app-${GitHubOrg}-${RepositoryName}
+              - Effect: Allow
+                Action:
+                - iam:PassRole
+                Resource: '*'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: apprunner.amazonaws.com
+              - Effect: Allow
+                Action:
+                - apprunner:CreateService
+                - apprunner:DescribeService
+                - apprunner:UpdateService
+                - apprunner:DeleteService
+                Resource:
+                - !Sub arn:aws:apprunner:${AWS::Region}:${AWS::AccountId}:service/${GitHubOrg}-${RepositoryName}/*
+              - Effect: Allow
+                Action:
+                - iam:CreateServiceLinkedRole
+                Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/aws-service-role/apprunner.amazonaws.com/AWSServiceRoleForAppRunner
+                Condition:
+                  StringLike:
+                    iam:AWSServiceName: apprunner.amazonaws.com
+
+
+
+  PermissionsBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub quinntainer-boundary-${GitHubOrg}-${RepositoryName}
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+            - ecr:GetAuthorizationToken
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - ecr:DescribeImages
+            - ecr:BatchGetImage
+            - ecr:BatchCheckLayerAvailability
+            - ecr:GetDownloadUrlForLayer
+            Resource:
+            - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${GitHubOrg}/${RepositoryName}
+Outputs:
+  Role:
+    Value: !GetAtt Role.Arn 

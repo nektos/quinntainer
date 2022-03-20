@@ -1,0 +1,22 @@
+name: Deploy
+
+on:
+  push:
+    branches: 
+    - {{ branch }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    concurrency: deploy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: nektos/quinntainer@{{ version }}
+      with: 
+        aws-region: {{ region }}
+        role-to-assume: {{{ role }}}
+        port: {{ port }}
+
