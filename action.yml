@@ -1,0 +1,66 @@
+name: 'Quinntainer'
+description: 'Deploy containers to AWS'
+inputs:
+  aws-region:
+    description: 'AWS Region, e.g. us-east-2'
+    required: true
+  role-to-assume:
+    description: 'ARN of IAM Role to assume via GHA OIDC'
+    required: true
+  port:
+    description: 'Port listening in container'
+    required: true
+  cpu:
+    description: 'CPU to allocate to container'
+    default: 1024
+  memory:
+    description: 'Memory to allocate to container'
+    default: 2048
+  docker-build-context:
+    description: 'Path to docker build context'
+    default: '.'
+  dockerfile:
+    description: 'Path to Dockerfile'
+    default: 'Dockerfile'
+outputs:
+  aws-account-id:
+    description: 'The AWS account ID for the provided credentials'
+  registry:
+    description: 'The URI of the ECR registry i.e. aws_account_id.dkr.ecr.region.amazonaws.com. If multiple registries are provided as inputs, this output will not be set.'
+runs:
+  using: 'composite'
+  steps:
+    - name: Git clone the repository
+      uses: actions/checkout@v2
+    - name: configure aws credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        role-to-assume: ${{inputs.role-to-assume}}
+        aws-region: ${{inputs.aws-region}}
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+    - name: Setup ECR
+      uses: aws-actions/aws-cloudformation-github-deploy@v1
+      with:
+        name: quinntainer-repo-${{ github.repository_owner }}-${{ github.event.repository.name }}
+        template: ${{ github.action_path }}/cfn-repo.yaml
+        parameter-overrides: "GitHubOrg=${{ github.repository_owner }},RepositoryName=${{ github.event.repository.name }}"
+        no-fail-on-empty-changeset: "1"
+    - name: Build, tag, and push image to Amazon ECR
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ github.repository }}
+        IMAGE_TAG: ${{ github.sha }}
+      shell: bash
+      run: |
+        docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -f ${{ inputs.dockerfile }} ${{ inputs.docker-build-context }}
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+    - name: Setup App Runner
+      uses: aws-actions/aws-cloudformation-github-deploy@v1
+      with:
+        name: quinntainer-app-${{ github.repository_owner }}-${{ github.event.repository.name }}
+        template: ${{ github.action_path }}/cfn-app-runner.yaml
+        parameter-overrides: "GitHubOrg=${{ github.repository_owner }},RepositoryName=${{ github.event.repository.name }},ImageTag=${{ github.sha }},Port=${{ inputs.port }},Cpu=${{ inputs.cpu }},Memory=${{ inputs.memory }}"
+        no-fail-on-empty-changeset: "1"
+        capabilities: "CAPABILITY_NAMED_IAM"

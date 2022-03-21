@@ -1,0 +1,71 @@
+Parameters:
+  GitHubOrg:
+    Type: String
+  RepositoryName:
+    Type: String
+  ImageTag:
+    Type: String
+  Port:
+    Type: Number
+  Cpu:
+    Type: Number
+    AllowedValues:
+    - 1024
+    - 2048
+  Memory:
+    Type: Number
+    AllowedValues:
+    - 2048
+    - 3072
+    - 4096
+
+
+Resources:
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub quinntainer-app-${GitHubOrg}-${RepositoryName}
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: "build.apprunner.amazonaws.com"
+      PermissionsBoundary: !Sub arn:aws:iam::${AWS::AccountId}:policy/quinntainer-boundary-${GitHubOrg}-${RepositoryName}
+      Policies:
+        - PolicyName: ecr-policy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                - ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                - ecr:DescribeImages
+                - ecr:BatchGetImage
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                Resource:
+                - !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${GitHubOrg}/${RepositoryName}
+  App:
+    Type: AWS::AppRunner::Service
+    Properties:
+      ServiceName: !Sub ${GitHubOrg}-${RepositoryName}
+      SourceConfiguration:
+        AuthenticationConfiguration:
+          AccessRoleArn: !GetAtt Role.Arn 
+        AutoDeploymentsEnabled: false
+        ImageRepository:
+          ImageIdentifier: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${GitHubOrg}/${RepositoryName}:${ImageTag}"
+          ImageRepositoryType: ECR
+          ImageConfiguration:
+            Port: !Ref Port
+      InstanceConfiguration:
+        Cpu: !Ref Cpu
+        Memory: !Ref Memory
+
+Outputs:
+  AppUrl:
+    Value: !GetAtt App.ServiceUrl 
