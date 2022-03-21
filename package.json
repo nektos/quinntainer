@@ -21,9 +21,12 @@
   "homepage": "https://github.com/nektos/quinntainer#readme",
   "dependencies": {
     "@aws-sdk/client-cloudformation": "^3.54.1",
+    "colors": "^1.4.0",
+    "diff": "^5.0.0",
     "git-url-parse": "^11.6.0",
     "inquirer": "^8.2.1",
     "isomorphic-git": "^1.15.0",
+    "mustache": "^4.2.0",
     "ora": "^5.4.1",
     "yargs": "^17.3.1"
   }

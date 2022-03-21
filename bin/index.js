@@ -4,9 +4,13 @@ const yargs = require("yargs/yargs");
 const { hideBin } = require('yargs/helpers');
 const ora = require('ora');
 const git = require('isomorphic-git');
+const Mustache = require('mustache');
 const fs = require('fs');
+const http = require('isomorphic-git/http/node');
 const path = require('path');
 const GitUrlParse = require("git-url-parse");
+const Diff = require('diff');
+require('colors');
 const inquirer = require('inquirer')
 const { 
   CloudFormationClient, 
@@ -26,9 +30,20 @@ const doInit = async (argv) => {
   const oidcProvider = providerStack.Outputs
     .filter(o => o.OutputKey === 'OidcProvider')
     .map(o => o.OutputValue)[0];
-  await upsertRoleStack(repoInfo.org, repoInfo.repo, oidcProvider);
 
-  // Setup GH action 
+  const roleStack = await upsertRoleStack(repoInfo.org, repoInfo.repo, oidcProvider);
+  const role = roleStack.Outputs
+    .filter(o => o.OutputKey === 'Role')
+    .map(o => o.OutputValue)[0];
+
+  const region = roleStack.StackId.split(':')[3];
+
+  return setupWorkflow({
+    region, 
+    role, 
+    branch: repoInfo.branch,
+    root: repoInfo.root,
+  });
 };
 
 const getRepoInfo = async () => {
@@ -137,6 +152,51 @@ const upsertStack = async (params) => {
     StackName: stackName,
   }));
   return resp.Stacks[0]
+};
+
+const setupWorkflow = async (config) => {
+    const answers = await inquirer.prompt([{
+      type: "number",
+      name: "port",
+      message: "What port does your container expose?",
+      default: 8080,
+    }]);
+    config.port = answers.port;
+    const template = fs.readFileSync(path.resolve(__dirname, '../gha-deploy.yaml')).toString('utf8');
+    const newWorkflow = Mustache.render(template, config);
+
+    const workflowRelPath = '.github/workflows/quinntainer-deploy.yaml';
+    const workflowPath = path.resolve(config.root, workflowRelPath);
+
+    if(fs.existsSync(workflowPath)) {
+      const existingWorkflow = fs.readFileSync(workflowPath).toString('utf8');
+      const diff = Diff.diffLines(existingWorkflow, newWorkflow);
+      if(diff.filter(part => part.added || part.removed).length) {
+        diff.forEach((part) => {
+          // green for additions, red for deletions
+          // grey for common parts
+          const color = part.added ? 'green' :
+            part.removed ? 'red' : 'grey';
+          process.stderr.write(part.value[color]);
+        });
+        const answers = await inquirer.prompt([{
+          type: "confirm",
+          name: "approve",
+          message: `OK to overwrite ${workflowPath} with these changes?`,
+          default: true,
+        }]);
+        if(answers.approve !== true) {
+          throw new Error("Exiting");
+        }
+      } else {
+        // no changes
+        return;
+      }
+    }
+
+    fs.mkdirSync(path.dirname(workflowPath), { recursive: true });
+    fs.writeFileSync(workflowPath, newWorkflow);
+    console.log("Changes to workflow file have been made. You now need to commit and push these to take effect.")
 };
 
 yargs(hideBin(process.argv))
