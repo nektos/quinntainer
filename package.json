@@ -1,6 +1,6 @@
 {
   "name": "quinntainer",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -28,6 +28,7 @@
     "isomorphic-git": "^1.15.0",
     "mustache": "^4.2.0",
     "ora": "^5.4.1",
+    "pkginfo": "^0.4.1",
     "yargs": "^17.3.1"
   }
 }

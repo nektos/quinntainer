@@ -1,5 +1,6 @@
 #! /usr/bin/env node
 
+require('pkginfo')(module, 'version');
 const yargs = require("yargs/yargs");
 const { hideBin } = require('yargs/helpers');
 const ora = require('ora');
@@ -38,11 +39,14 @@ const doInit = async (argv) => {
 
   const region = roleStack.StackId.split(':')[3];
 
+  const version = `v${module.exports.version}`;
+
   return setupWorkflow({
     region, 
     role, 
     branch: repoInfo.branch,
     root: repoInfo.root,
+    version,
   });
 };
 

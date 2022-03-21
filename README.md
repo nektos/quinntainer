@@ -32,7 +32,7 @@ jobs:
     concurrency: deploy
     runs-on: ubuntu-latest
     steps:
-    - uses: nektos/quinntainer@main
+    - uses: nektos/quinntainer@v1
       with: 
         aws-region: us-west-2
         role-to-assume: arn:aws:iam::0123456789:role/quinntainer-gha-myorg-myrepo
